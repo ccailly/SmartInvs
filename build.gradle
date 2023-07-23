@@ -44,15 +44,8 @@ jar {
 }
 
 signing {
-    sign configurations.archives
-}
-
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            groupId = group
-            artifactId = 'SmartInvs'
-            version = version
-        }
+    setRequired {
+        // signing is only required if the artifacts are to be published
+        gradle.taskGraph.allTasks.any { it.equals( PublishToMavenRepository) }
     }
 }
