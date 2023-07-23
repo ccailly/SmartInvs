@@ -3,36 +3,43 @@ package fr.minuskube.inv.content;
 import fr.minuskube.inv.ClickableItem;
 import fr.minuskube.inv.SmartInventory;
 
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 public interface SlotIterator {
 
     enum Type {
         HORIZONTAL,
-        VERTICAL
+        VERTICAL,
+        CUSTOM,
+        PAGED
     }
 
     Optional<ClickableItem> get();
+
     SlotIterator set(ClickableItem item);
 
     SlotIterator previous();
+
     SlotIterator next();
 
     SlotIterator blacklist(int row, int column);
+
     SlotIterator blacklist(SlotPos slotPos);
 
     int row();
+
     SlotIterator row(int row);
 
     int column();
+
     SlotIterator column(int column);
 
     boolean started();
+
     boolean ended();
 
     boolean doesAllowOverride();
+
     SlotIterator allowOverride(boolean override);
 
 
@@ -45,6 +52,8 @@ public interface SlotIterator {
         private boolean started = false;
         private boolean allowOverride = true;
         private int row, column;
+        private ListIterator<SlotPos> customSlots;
+        private Map<Integer, ListIterator<SlotPos>> pagedSlots;
 
         private Set<SlotPos> blacklisted = new HashSet<>();
 
@@ -61,6 +70,26 @@ public interface SlotIterator {
         }
 
         public Impl(InventoryContents contents, SmartInventory inv,
+                    Type type, ListIterator<SlotPos> slots) {
+            this.contents = contents;
+            this.inv = inv;
+
+            this.type = type;
+
+            this.customSlots = slots;
+        }
+
+        public Impl(InventoryContents contents, SmartInventory inv,
+                    Type type, Map<Integer, ListIterator<SlotPos>> slots) {
+            this.contents = contents;
+            this.inv = inv;
+
+            this.type = type;
+
+            this.pagedSlots = slots;
+        }
+
+        public Impl(InventoryContents contents, SmartInventory inv,
                     Type type) {
 
             this(contents, inv, type, 0, 0);
@@ -73,7 +102,7 @@ public interface SlotIterator {
 
         @Override
         public SlotIterator set(ClickableItem item) {
-            if(canPlace())
+            if (canPlace())
                 contents.set(row, column, item);
 
             return this;
@@ -81,21 +110,20 @@ public interface SlotIterator {
 
         @Override
         public SlotIterator previous() {
-            if(row == 0 && column == 0) {
+            if (row == 0 && column == 0) {
                 this.started = true;
                 return this;
             }
 
             do {
-                if(!this.started) {
+                if (!this.started) {
                     this.started = true;
-                }
-                else {
-                    switch(type) {
+                } else {
+                    switch (type) {
                         case HORIZONTAL:
                             column--;
 
-                            if(column == 0) {
+                            if (column == 0) {
                                 column = inv.getColumns() - 1;
                                 row--;
                             }
@@ -103,48 +131,77 @@ public interface SlotIterator {
                         case VERTICAL:
                             row--;
 
-                            if(row == 0) {
+                            if (row == 0) {
                                 row = inv.getRows() - 1;
                                 column--;
+                            }
+                            break;
+                        case CUSTOM:
+                            if (this.customSlots.hasPrevious()) {
+                                SlotPos slotPos = this.customSlots.previous();
+                                this.row = slotPos.getRow();
+                                this.column = slotPos.getColumn();
+                            }
+                            break;
+                        case PAGED:
+                            if (this.pagedSlots.containsKey(contents.pagination().getPage())
+                                    && this.pagedSlots.get(contents.pagination().getPage()).hasPrevious()) {
+                                SlotPos slotPos = this.pagedSlots.get(contents.pagination().getPage()).previous();
+                                this.row = slotPos.getRow();
+                                this.column = slotPos.getColumn();
                             }
                             break;
                     }
                 }
             }
-            while(!canPlace() && (row != 0 || column != 0));
+            while (!canPlace() && (row != 0 || column != 0));
 
             return this;
         }
 
         @Override
         public SlotIterator next() {
-            if(ended()) {
+            if (ended()) {
                 this.started = true;
                 return this;
             }
 
             do {
-                if(!this.started) {
+                if (!this.started) {
                     this.started = true;
-                }
-                else {
-                    switch(type) {
+                } else {
+                    switch (type) {
                         case HORIZONTAL:
                             column = ++column % inv.getColumns();
 
-                            if(column == 0)
+                            if (column == 0)
                                 row++;
                             break;
                         case VERTICAL:
                             row = ++row % inv.getRows();
 
-                            if(row == 0)
+                            if (row == 0)
                                 column++;
+                            break;
+                        case CUSTOM:
+                            if (this.customSlots.hasNext()) {
+                                SlotPos slotPos = this.customSlots.previous();
+                                row = slotPos.getRow();
+                                column = slotPos.getColumn();
+                            }
+                            break;
+                        case PAGED:
+                            if (this.pagedSlots.containsKey(contents.pagination().getPage())
+                                    && this.pagedSlots.get(contents.pagination().getPage()).hasNext()) {
+                                SlotPos slotPos = this.pagedSlots.get(contents.pagination().getPage()).next();
+                                this.row = slotPos.getRow();
+                                this.column = slotPos.getColumn();
+                            }
                             break;
                     }
                 }
             }
-            while(!canPlace() && !ended());
+            while (!canPlace() && !ended());
 
             return this;
         }
@@ -161,7 +218,9 @@ public interface SlotIterator {
         }
 
         @Override
-        public int row() { return row; }
+        public int row() {
+            return row;
+        }
 
         @Override
         public SlotIterator row(int row) {
@@ -170,7 +229,9 @@ public interface SlotIterator {
         }
 
         @Override
-        public int column() { return column; }
+        public int column() {
+            return column;
+        }
 
         @Override
         public SlotIterator column(int column) {
@@ -190,7 +251,9 @@ public interface SlotIterator {
         }
 
         @Override
-        public boolean doesAllowOverride() { return allowOverride; }
+        public boolean doesAllowOverride() {
+            return allowOverride;
+        }
 
         @Override
         public SlotIterator allowOverride(boolean override) {
