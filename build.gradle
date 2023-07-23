@@ -1,4 +1,4 @@
-group 'fr.minuskube.inv'
+group 'com.github.ccailly'
 version '1.2.7'
 
 apply plugin: 'java'
@@ -45,4 +45,14 @@ jar {
 
 signing {
     sign configurations.archives
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = group
+            artifactId = 'SmartInvs'
+            version = version
+        }
+    }
 }
